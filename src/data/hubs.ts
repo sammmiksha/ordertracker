@@ -429,3 +429,65 @@ export async function reverseGeocodeUserLocation(
     };
   }
 }
+
+export interface PlaceSuggestion {
+  displayName: string;
+  coords: [number, number];
+  city: string;
+  pincode: string;
+}
+
+/**
+ * Searches specific Indian localities, societies, streets, and areas using Nominatim
+ */
+export async function searchPlacesOnline(query: string): Promise<PlaceSuggestion[]> {
+  if (!query || query.trim().length < 3) return [];
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim() + ' India')}&format=json&limit=5&addressdetails=1`;
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(3500),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data || []).map((item: any) => {
+      const addr = item.address || {};
+      const suburb = addr.suburb || addr.neighbourhood || addr.residential || addr.road || '';
+      const city = addr.city || addr.town || addr.municipality || addr.state_district || '';
+      const name = suburb ? `${suburb}, ${city}` : (city || item.display_name.split(',')[0]);
+      return {
+        displayName: item.display_name,
+        coords: [parseFloat(item.lat), parseFloat(item.lon)] as [number, number],
+        city: name || query,
+        pincode: addr.postcode || '',
+      };
+    });
+  } catch (err) {
+    return [];
+  }
+}
+
+/**
+ * Geocodes an arbitrary Indian address / particular area to coordinates
+ */
+export async function geocodeAddressOnline(query: string): Promise<[number, number] | null> {
+  if (!query || query.trim().length < 2) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim() + ' India')}&format=json&limit=1`;
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data.length > 0) {
+      return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+

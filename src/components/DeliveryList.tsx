@@ -26,6 +26,7 @@ interface DeliveryListProps {
   onAdvanceScan: (orderId: string) => void;
   onDeleteOrder: (orderId: string) => void;
   onOpenAddModal: () => void;
+  onMarkDelivered?: (orderId: string) => void;
 }
 
 export const DeliveryList: React.FC<DeliveryListProps> = ({
@@ -36,6 +37,7 @@ export const DeliveryList: React.FC<DeliveryListProps> = ({
   onAdvanceScan,
   onDeleteOrder,
   onOpenAddModal,
+  onMarkDelivered,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'today' | 'tomorrow' | 'later' | 'delivered'>('all');
@@ -344,15 +346,27 @@ export const DeliveryList: React.FC<DeliveryListProps> = ({
                           </button>
                         </div>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           {order.status !== 'delivered' && (
-                            <button
-                              onClick={() => onAdvanceScan(order.id)}
-                              title="Advance Scan"
-                              className="px-2 py-1 rounded-lg text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer"
-                            >
-                              + Next Scan
-                            </button>
+                            <>
+                              {onMarkDelivered && (
+                                <button
+                                  onClick={() => onMarkDelivered(order.id)}
+                                  title="Mark order as delivered"
+                                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer flex items-center gap-1"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Delivered 🎉</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => onAdvanceScan(order.id)}
+                                title="Advance Scan"
+                                className="px-2 py-1 rounded-lg text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer"
+                              >
+                                + Next Scan
+                              </button>
+                            </>
                           )}
                           <button
                             onClick={() => onDeleteOrder(order.id)}

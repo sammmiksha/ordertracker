@@ -280,6 +280,50 @@ export const App: React.FC = () => {
     }));
   };
 
+  // Mark an order as delivered with doorstep event and confetti celebration
+  const handleMarkDelivered = (orderId: string) => {
+    setOrders(prev => prev.map(order => {
+      if (order.id !== orderId) return order;
+
+      const updatedEvents = [
+        {
+          id: 'ev-deliv-' + Date.now(),
+          timestamp: 'Today, Just now',
+          timeAgo: 'Just now',
+          location: order.destinationCity,
+          hubName: 'Customer Doorstep',
+          coordinates: order.destinationCoords,
+          status: 'delivered' as DeliveryStatus,
+          description: `Package handed over at ${order.destinationCity}. Delivered verified.`
+        },
+        ...order.events
+      ];
+
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      } catch (e) {
+        // ignore
+      }
+
+      showToast('Delivered! 🎉', `${order.label} was marked as delivered.`, 'delivered');
+
+      return {
+        ...order,
+        status: 'delivered' as DeliveryStatus,
+        timelineGroup: 'delivered' as TimelineGroup,
+        expectedDate: 'Delivered Today',
+        currentCity: order.destinationCity,
+        currentCoords: order.destinationCoords,
+        lastUpdated: 'Delivered Today',
+        events: updatedEvents,
+      };
+    }));
+  };
+
   // Background Courier Poller Simulator / Live API Runner
   const handleTriggerPoller = async () => {
     if (isPolling) return;
@@ -433,6 +477,7 @@ export const App: React.FC = () => {
             onAdvanceScan={handleAdvanceScan}
             onDeleteOrder={handleDeleteOrder}
             onOpenAddModal={() => setIsAddModalOpen(true)}
+            onMarkDelivered={handleMarkDelivered}
           />
         </section>
       </main>
