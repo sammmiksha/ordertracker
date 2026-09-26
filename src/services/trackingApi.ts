@@ -282,8 +282,98 @@ export class Ship24TrackingProvider implements TrackingProvider {
   }
 }
 
+export const DEFAULT_RAPIDAPI_KEY = 'df094e98f4msh188dd686203ff64p1a0500jsn385282b18814';
+
+/**
+ * 🟢 RapidAPI Cheap Tracking Provider (Live Multi-Carrier)
+ */
+export class RapidApiTrackingProvider implements TrackingProvider {
+  id = 'rapidapi';
+  name = 'RapidAPI Live Tracker';
+  isLive = true;
+  description = 'Live multi-carrier tracking with carrier auto-detection via RapidAPI';
+
+  async track(trackingNumber: string, courier: Courier, destinationCity: string): Promise<TrackingApiResult> {
+    const apiKey = getStoredApiKey() || DEFAULT_RAPIDAPI_KEY;
+
+    try {
+      const response = await fetch('https://cheap-tracking-status.p.rapidapi.com/TrackingGetTrackingDetails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-rapidapi-key': apiKey,
+          'x-rapidapi-host': 'cheap-tracking-status.p.rapidapi.com',
+        },
+        body: JSON.stringify({
+          TrackingCode: trackingNumber.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`RapidAPI returned HTTP ${response.status}`);
+      }
+
+      const resJson = await response.json();
+      const payloadData = resJson?.data || {};
+      const rawEvents = payloadData.events || [];
+
+      let detectedCarrier = courier || 'courier';
+      const events: TrackingEvent[] = rawEvents.map((ev: any, idx: number) => {
+        const loc = ev.location || 'Transit Hub';
+        const statusText = ev.status || 'Scan recorded';
+        let desc = `${statusText} recorded by carrier.`;
+        if (ev.courier?.translation?.name) {
+          detectedCarrier = ev.courier.translation.name;
+          desc = `${statusText} (${detectedCarrier})`;
+        }
+        const coords = geocodeCity(loc || destinationCity);
+
+        return {
+          id: `ev-rapid-${idx}-${Date.now()}`,
+          timestamp: ev.datetime ? new Date(ev.datetime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Live Scan',
+          timeAgo: 'Live Scan',
+          location: loc || `${detectedCarrier} Hub`,
+          hubName: `${detectedCarrier} Logistics Terminal`,
+          coordinates: coords.coords,
+          status: statusText.toLowerCase().includes('delivered') ? 'delivered' : statusText.toLowerCase().includes('out') ? 'out_for_delivery' : 'in_transit',
+          description: desc,
+        };
+      });
+
+      const isDelivered = payloadData.dispatch_code?.desc?.toLowerCase().includes('delivered') || events[0]?.status === 'delivered';
+      const latestHub = events[0]?.location || 'Courier Gateway';
+
+      return {
+        success: true,
+        status: isDelivered ? 'delivered' : (events[0]?.status || 'in_transit'),
+        currentHub: latestHub,
+        destinationCity,
+        expectedDate: isDelivered ? 'Delivered' : 'In Transit via Courier',
+        events,
+        providerName: `RapidAPI (${detectedCarrier})`,
+        isLiveTracking: true,
+        providerMode: 'live',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        status: 'order_placed',
+        currentHub: 'Connection Error',
+        destinationCity,
+        expectedDate: 'N/A',
+        events: [],
+        providerName: 'RapidAPI Tracking',
+        isLiveTracking: false,
+        providerMode: 'live',
+        error: err?.message || 'Failed to query RapidAPI tracking service.',
+      };
+    }
+  }
+}
+
 // Active provider registry on the frontend
 const PROVIDERS: Record<string, TrackingProvider> = {
+  rapidapi: new RapidApiTrackingProvider(),
   fastapi: new FastApiBackendProvider(),
   demo: new DemoTrackingProvider(),
   ship24: new Ship24TrackingProvider(),
@@ -291,7 +381,8 @@ const PROVIDERS: Record<string, TrackingProvider> = {
 
 export function getActiveTrackingProvider(): TrackingProvider {
   const provType = getStoredApiProvider();
-  return PROVIDERS[provType] || PROVIDERS.fastapi;
+  if (provType === 'demo') return PROVIDERS.demo;
+  return PROVIDERS.rapidapi;
 }
 
 export function setActiveTrackingProvider(type: ApiProviderType): void {

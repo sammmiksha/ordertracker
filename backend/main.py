@@ -69,6 +69,18 @@ async def configure_trackparcel(req: SetKeyRequest):
         "active_provider": registry.get_active_provider().name
     }
 
+@app.post("/api/config/rapidapi")
+async def configure_rapidapi(req: SetKeyRequest):
+    """
+    Hot-swap / configure the RapidAPI key without restarting the server.
+    """
+    registry.set_rapidapi_key(req.api_key.strip())
+    return {
+        "success": True,
+        "message": "RapidAPI Cheap Tracking key successfully activated.",
+        "active_provider": registry.get_active_provider().name
+    }
+
 @app.get("/api/analytics/corridor", response_model=DelayAnalysis)
 async def check_corridor_delay(
     origin: str = Query(..., description="Origin city / hub"),

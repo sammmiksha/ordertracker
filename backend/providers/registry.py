@@ -2,6 +2,7 @@ import os
 from typing import Optional, Dict
 from backend.providers.base import BaseTrackingProvider, TrackingResult, ProviderEvent, NormalizedStatus
 from backend.providers.trackparcel import TrackParcelProvider
+from backend.providers.rapidapi_tracker import RapidApiCheapTrackerProvider
 from backend.intelligence.geocoder import geocode_location
 
 class DirectSimulationProvider(BaseTrackingProvider):
@@ -67,14 +68,22 @@ class ProviderRegistry:
 
     def register_defaults(self):
         tp_key = os.getenv("TRACKPARCEL_API_KEY")
+        rapid_key = os.getenv("RAPIDAPI_KEY")
+        self.providers["rapidapi"] = RapidApiCheapTrackerProvider(api_key=rapid_key)
         self.providers["trackparcel"] = TrackParcelProvider(api_key=tp_key)
         self.providers["direct"] = DirectSimulationProvider()
 
     def get_active_provider(self) -> BaseTrackingProvider:
+        rap = self.providers.get("rapidapi")
+        if rap and rap.is_configured:
+            return rap
         tp = self.providers.get("trackparcel")
         if tp and tp.is_configured:
             return tp
         return self.providers["direct"]
+
+    def set_rapidapi_key(self, api_key: str):
+        self.providers["rapidapi"] = RapidApiCheapTrackerProvider(api_key=api_key)
 
     def set_trackparcel_key(self, api_key: str):
         self.providers["trackparcel"] = TrackParcelProvider(api_key=api_key)
