@@ -77,7 +77,7 @@ export const App: React.FC = () => {
   }, [orders]);
 
   const showToast = (title: string, message: string, type: 'update' | 'delivered' | 'info' = 'update') => {
-    const id = Date.now().toString();
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     setToasts(prev => [...prev, { id, title, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
