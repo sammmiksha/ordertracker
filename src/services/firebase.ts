@@ -18,8 +18,17 @@ export interface FirebaseConfig {
 
 export const FIREBASE_CONFIG_STORAGE_KEY = 'ordertracker_firebase_config';
 
-// Default config from env or storage
-export function getStoredFirebaseConfig(): FirebaseConfig | null {
+export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: "AIzaSyD7AX7-fsf3iGpmULOSv96h-4FrR0hK8qI",
+  authDomain: "ordertracker-1ae40.firebaseapp.com",
+  projectId: "ordertracker-1ae40",
+  storageBucket: "ordertracker-1ae40.firebasestorage.app",
+  messagingSenderId: "200590608543",
+  appId: "1:200590608543:web:67132b477476219f373aaa",
+};
+
+// Default config from env, storage, or pre-configured credentials
+export function getStoredFirebaseConfig(): FirebaseConfig {
   try {
     const saved = localStorage.getItem(FIREBASE_CONFIG_STORAGE_KEY);
     if (saved) return JSON.parse(saved);
@@ -39,7 +48,7 @@ export function getStoredFirebaseConfig(): FirebaseConfig | null {
     };
   }
 
-  return null;
+  return DEFAULT_FIREBASE_CONFIG;
 }
 
 export function saveFirebaseConfig(config: FirebaseConfig): void {
