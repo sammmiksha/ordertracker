@@ -34,14 +34,20 @@ class RapidApiCheapTrackerProvider(BaseTrackingProvider):
             "TrackingCode": tracking_number.strip()
         }
 
-        async with httpx.AsyncClient(timeout=35.0) as client:
-            resp = await client.post(
-                self.RAPIDAPI_ENDPOINT,
-                json=payload,
-                headers=headers
-            )
-            resp.raise_for_status()
-            res_json = resp.json()
+        res_json: Dict[str, Any] = {}
+        try:
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                resp = await client.post(
+                    self.RAPIDAPI_ENDPOINT,
+                    json=payload,
+                    headers=headers
+                )
+                if resp.status_code == 200:
+                    res_json = resp.json()
+                else:
+                    print(f"RapidAPI HTTP {resp.status_code}: {resp.text[:100]}")
+        except Exception as e:
+            print(f"RapidAPI carrier query timed out or offline: {e}")
 
         # Parse RapidAPI carrier response
         payload_data = res_json.get("data") or {}

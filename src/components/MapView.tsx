@@ -36,10 +36,11 @@ export const MapView: React.FC<MapViewProps> = ({
         attributionControl: false,
       });
 
-      // CartoDB Positron clean map tiles
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      // Free, open-source OpenStreetMap tiles (No API key required, zero watermarks)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        subdomains: 'abcd',
+        subdomains: ['a', 'b', 'c'],
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(map);
 
       // Custom zoom control in bottom right

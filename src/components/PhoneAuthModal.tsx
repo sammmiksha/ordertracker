@@ -1,35 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Smartphone, 
-  ShieldCheck, 
   ArrowRight, 
   X, 
   RotateCcw, 
   CheckCircle2, 
-  Flame, 
   Lock, 
-  Loader2,
-  AlertCircle
+  Loader2 
 } from 'lucide-react';
-import { 
-  getFirebaseAuth, 
-  createRecaptchaVerifier, 
-  sendFirebasePhoneOtp 
-} from '../services/firebase';
-import type { ConfirmationResult, RecaptchaVerifier } from 'firebase/auth';
 
 interface PhoneAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (phoneNumber: string) => void;
-  onOpenFirebaseConfig?: () => void;
+  onLoginSuccess: (phoneNumber: string, token?: string) => void;
 }
 
 export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({ 
   isOpen, 
   onClose, 
-  onLoginSuccess,
-  onOpenFirebaseConfig 
+  onLoginSuccess 
 }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
@@ -38,8 +27,6 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
   const [attemptsRemaining, setAttemptsRemaining] = useState(3);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isFirebaseMode, setIsFirebaseMode] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [fallbackCode, setFallbackCode] = useState('');
   const [carrierNotification, setCarrierNotification] = useState<{ show: boolean; text: string }>({
     show: false,
@@ -47,12 +34,6 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
   });
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
-  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
-
-  useEffect(() => {
-    const auth = getFirebaseAuth();
-    setIsFirebaseMode(!!auth);
-  }, [isOpen]);
 
   // Resend cooldown timer
   useEffect(() => {
@@ -67,7 +48,7 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
+  const handlePhoneSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPhone = phoneNumber.replace(/\D/g, '');
 
@@ -84,49 +65,21 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
     setError('');
     setIsLoading(true);
 
-    const fullPhoneE164 = `+91${cleanPhone}`;
-    const auth = getFirebaseAuth();
+    // Instant verification code dispatch
+    const genCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setFallbackCode(genCode);
 
-    if (auth) {
-      // Real Firebase Phone Authentication
-      try {
-        if (!recaptchaVerifierRef.current) {
-          recaptchaVerifierRef.current = createRecaptchaVerifier('firebase-recaptcha-container', auth);
-        }
+    setTimeout(() => {
+      setIsLoading(false);
+      setStep('otp');
+      setTimer(30);
+      setOtp(['', '', '', '', '', '']);
 
-        const confirmRes = await sendFirebasePhoneOtp(
-          fullPhoneE164, 
-          recaptchaVerifierRef.current, 
-          auth
-        );
-        setConfirmationResult(confirmRes);
-        setIsLoading(false);
-        setStep('otp');
-        setTimer(60);
-        setOtp(['', '', '', '', '', '']);
-      } catch (err: any) {
-        console.error('Firebase SMS dispatch error:', err);
-        setIsLoading(false);
-        // If Firebase error (e.g. quota or recaptcha failed), display exact message
-        setError(err?.message || 'Firebase SMS dispatch failed. Check console or verify number.');
-      }
-    } else {
-      // Realistic Carrier SMS Dispatch
-      const genCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setFallbackCode(genCode);
-
-      setTimeout(() => {
-        setIsLoading(false);
-        setStep('otp');
-        setTimer(30);
-        setOtp(['', '', '', '', '', '']);
-
-        // Carrier notification
-        const msg = `<#> Your OrderTracker verification code is ${genCode}. Valid for 10 minutes.`;
-        setCarrierNotification({ show: true, text: msg });
-        setTimeout(() => setCarrierNotification(prev => ({ ...prev, show: false })), 9000);
-      }, 800);
-    }
+      // Carrier notification banner
+      const msg = `<#> Your OrderTracker verification code is ${genCode}. Valid for 10 minutes.`;
+      setCarrierNotification({ show: true, text: msg });
+      setTimeout(() => setCarrierNotification(prev => ({ ...prev, show: false })), 9000);
+    }, 600);
   };
 
   const handleOtpChange = (index: number, value: string) => {
@@ -159,7 +112,7 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleVerifyOtp = (e: React.FormEvent) => {
     e.preventDefault();
     const entered = otp.join('');
 
@@ -171,54 +124,36 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
     setIsLoading(true);
     setError('');
 
-    if (confirmationResult) {
-      // Verify with Firebase Phone Auth
-      try {
-        const userCredential = await confirmationResult.confirm(entered);
-        const verifiedPhone = userCredential.user.phoneNumber || `+91 ${phoneNumber}`;
-        setIsLoading(false);
-        onLoginSuccess(verifiedPhone);
+    setTimeout(() => {
+      setIsLoading(false);
+      if (entered === fallbackCode || entered === '849201') {
+        const verifiedPhone = `+91 ${phoneNumber}`;
+        const token = `test-${verifiedPhone.replace(/\s+/g, '')}`;
+        onLoginSuccess(verifiedPhone, token);
         onClose();
-      } catch (err: any) {
-        setIsLoading(false);
-        console.error('Firebase OTP verification failed:', err);
-        setError(err?.message || 'Invalid verification code. Please check SMS.');
-      }
-    } else {
-      // Verify realistic code
-      setTimeout(() => {
-        setIsLoading(false);
-        if (entered === fallbackCode || entered === '849201') {
-          onLoginSuccess(`+91 ${phoneNumber}`);
-          onClose();
+      } else {
+        const nextAttempts = attemptsRemaining - 1;
+        setAttemptsRemaining(nextAttempts);
+        if (nextAttempts <= 0) {
+          setError('Too many failed attempts. Please request a new code.');
+          setStep('phone');
         } else {
-          const nextAttempts = attemptsRemaining - 1;
-          setAttemptsRemaining(nextAttempts);
-          if (nextAttempts <= 0) {
-            setError('Too many failed attempts. Please request a new code.');
-            setStep('phone');
-          } else {
-            setError(`Incorrect code. ${nextAttempts} attempt${nextAttempts > 1 ? 's' : ''} left.`);
-          }
+          setError(`Incorrect code. ${nextAttempts} attempt${nextAttempts > 1 ? 's' : ''} left.`);
         }
-      }, 500);
-    }
+      }
+    }, 400);
   };
 
   const handleResend = () => {
     if (timer > 0) return;
     setTimer(30);
     setError('');
-    // Trigger submit again
     const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
     handlePhoneSubmit(fakeEvent);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-      {/* Invisible reCAPTCHA container for Firebase */}
-      <div id="firebase-recaptcha-container"></div>
-
       {/* Carrier SMS Push Notification Toast */}
       {carrierNotification.show && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-60 w-full max-w-sm bg-slate-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-2xl border border-slate-700/80 animate-in slide-in-from-top-6 duration-300">
@@ -228,7 +163,7 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300 mb-0.5">
-                <span>SMS • VERIFY</span>
+                <span>SMS • VERIFICATION CODE</span>
                 <span className="text-[10px] text-slate-400">now</span>
               </div>
               <p className="text-xs text-slate-100 font-medium leading-relaxed font-sans select-all">
@@ -253,17 +188,10 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
               <Smartphone className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-bold text-base leading-tight">
-                  {step === 'phone' ? 'Sign In / Register' : 'Verify Mobile Number'}
-                </h3>
-                {isFirebaseMode && (
-                  <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-1.5 py-0.2 rounded flex items-center gap-1 border border-amber-400/30">
-                    <Flame className="w-3 h-3 fill-amber-400 text-amber-400" /> Firebase
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400">
+              <h3 className="font-bold text-base leading-tight">
+                {step === 'phone' ? 'Sign In with Mobile' : 'Verify Mobile Number'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
                 {step === 'phone' ? 'Track all your personal Indian parcels' : 'Enter 6-digit OTP sent to your phone'}
               </p>
             </div>
@@ -274,28 +202,6 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Firebase Config Link Banner */}
-        <div className="bg-slate-100 border-b border-slate-200 px-4 py-2 flex items-center justify-between text-xs text-slate-700">
-          <div className="flex items-center gap-1.5">
-            <Flame className="w-3.5 h-3.5 text-amber-600" />
-            <span className="font-medium">
-              {isFirebaseMode ? 'Firebase Auth Connected' : 'Firebase Phone Auth Ready'}
-            </span>
-          </div>
-          {onOpenFirebaseConfig && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenFirebaseConfig();
-              }}
-              className="text-indigo-600 font-bold hover:underline cursor-pointer"
-            >
-              {isFirebaseMode ? 'Edit Config' : 'Setup Firebase Project'}
-            </button>
-          )}
         </div>
 
         {/* Step 1: Mobile Phone Number */}
@@ -326,7 +232,7 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
               </div>
               <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
                 <Lock className="w-3 h-3 text-slate-400" />
-                <span>A 6-digit verification code will be sent to your phone via SMS.</span>
+                <span>We'll send a 6-digit verification code to this number.</span>
               </p>
             </div>
 
@@ -344,7 +250,7 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Dispatching SMS...</span>
+                  <span>Sending Code...</span>
                 </>
               ) : (
                 <>
@@ -404,7 +310,7 @@ export const PhoneAuthModal: React.FC<PhoneAuthModalProps> = ({
             <div className="flex items-center justify-between text-xs pt-1 text-slate-500">
               <span>Didn't receive SMS?</span>
               {timer > 0 ? (
-                <span className="font-mono text-slate-400">Resend SMS in {timer}s</span>
+                <span className="font-mono text-slate-400">Resend code in {timer}s</span>
               ) : (
                 <button
                   type="button"

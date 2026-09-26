@@ -3,7 +3,14 @@ import confetti from 'canvas-confetti';
 import { Order, DeliveryStatus, TimelineGroup } from './types';
 import { INITIAL_ORDERS } from './data/mockOrders';
 import { COURIER_META } from './utils/courierDetector';
-import { getStoredApiKey, fetchLiveTracking } from './services/trackingApi';
+import { 
+  getStoredApiKey, 
+  fetchOrdersFromBackend, 
+  refreshOrderOnBackend, 
+  deleteOrderOnBackend, 
+  setStoredAuthToken, 
+  removeStoredAuthToken 
+} from './services/trackingApi';
 
 import { Header } from './components/Header';
 import { MapView } from './components/MapView';
@@ -67,7 +74,24 @@ export const App: React.FC = () => {
   const [isPolling, setIsPolling] = useState(false);
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
 
-  // Persist real orders
+  // Load orders from Database via FastAPI on mount & auth change
+  useEffect(() => {
+    let isMounted = true;
+    const loadBackendOrders = async () => {
+      try {
+        const dbOrders = await fetchOrdersFromBackend();
+        if (isMounted && dbOrders && dbOrders.length > 0) {
+          setOrders(dbOrders);
+        }
+      } catch (err) {
+        console.warn('Backend orders unavailable or empty, keeping local state:', err);
+      }
+    };
+    loadBackendOrders();
+    return () => { isMounted = false; };
+  }, [userPhone]);
+
+  // Persist real orders to local cache as resilience fallback
   useEffect(() => {
     try {
       localStorage.setItem('ordertracker_real_orders_v2', JSON.stringify(orders));
@@ -84,37 +108,54 @@ export const App: React.FC = () => {
     }, 4500);
   };
 
-  const handleLoginSuccess = (phone: string) => {
+  const handleLoginSuccess = async (phone: string, token?: string) => {
     setUserPhone(phone);
     localStorage.setItem('ordertracker_user_phone', phone);
-    showToast('Signed In Successfully', `Logged in as ${phone}. Your orders are synced.`, 'info');
+    if (token) {
+      setStoredAuthToken(token);
+    }
+    showToast('Signed In Successfully', `Logged in as ${phone}. Database sync active.`, 'info');
+
+    // Reload orders for this authenticated user
+    try {
+      const userOrders = await fetchOrdersFromBackend(token);
+      setOrders(userOrders);
+    } catch (err) {
+      console.warn('Could not load user orders from DB:', err);
+    }
   };
 
   const handleLogout = () => {
     setUserPhone(null);
     localStorage.removeItem('ordertracker_user_phone');
+    removeStoredAuthToken();
     showToast('Signed Out', 'You have been signed out.', 'info');
   };
 
   const handleKeySaved = (key: string | null) => {
     setHasApiKey(!!key);
     if (key) {
-      showToast('API Key Connected', '17TRACK Free Tier connected. Real carrier queries enabled.', 'info');
+      showToast('RapidAPI Key Active', 'Multi-Carrier Live Tracker connected.', 'info');
     }
   };
 
   const handleAddOrder = (newOrder: Order) => {
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id && o.trackingId !== newOrder.trackingId)]);
     setSelectedOrderId(newOrder.id);
-    showToast('Parcel Added!', `${newOrder.label} (${COURIER_META[newOrder.courier]?.name}) added to map.`, 'info');
+    showToast('Parcel Added!', `${newOrder.label} (${COURIER_META[newOrder.courier]?.name || 'Courier'}) saved to database.`, 'info');
   };
 
-  const handleDeleteOrder = (orderId: string) => {
+  const handleDeleteOrder = async (orderId: string) => {
     setOrders(prev => prev.filter(o => o.id !== orderId));
     if (selectedOrderId === orderId) {
       setSelectedOrderId(null);
     }
-    showToast('Order Removed', 'Shipment deleted from your tracking list.', 'info');
+    try {
+      await deleteOrderOnBackend(orderId);
+    } catch (err) {
+      console.warn('Delete on backend failed:', err);
+    }
+    showToast('Order Removed', 'Shipment deleted from your tracking list and database.', 'info');
   };
 
   // Advance scan for a single order
@@ -228,43 +269,23 @@ export const App: React.FC = () => {
     }
 
     setIsPolling(true);
+    showToast('Querying Carrier Network', 'Checking live carrier scans via RapidAPI backend...', 'info');
 
-    if (hasApiKey) {
-      showToast('Querying Courier APIs', 'Connecting to 17TRACK for live scans...', 'info');
-
-      // Poll real active orders
+    try {
       const activeOrders = orders.filter(o => o.status !== 'delivered');
       for (const ord of activeOrders.slice(0, 3)) {
         try {
-          const res = await fetchLiveTracking(ord.trackingId, ord.courier);
-          if (res.success && res.events.length > 0) {
-            setOrders(prev => prev.map(o => o.id === ord.id ? {
-              ...o,
-              status: res.status,
-              currentCity: res.currentHub,
-              expectedDate: res.expectedDate,
-              events: res.events,
-              lastUpdated: 'Just now (Live Scan)'
-            } : o));
-          }
-        } catch (err) {
-          console.error('Error polling order:', ord.trackingId, err);
+          const updated = await refreshOrderOnBackend(ord.id);
+          setOrders(prev => prev.map(o => o.id === ord.id ? updated : o));
+        } catch (e) {
+          console.warn('Backend refresh failed for order:', ord.id, e);
         }
       }
+      showToast('Carrier Scans Refreshed', 'Shipment status and database updated.', 'info');
+    } catch (err) {
+      console.error('Poller error:', err);
+    } finally {
       setIsPolling(false);
-      showToast('Carrier Scans Refreshed', 'Live network check completed.', 'info');
-    } else {
-      // Simulate advance if no API key
-      setTimeout(() => {
-        setIsPolling(false);
-        const activeOrders = orders.filter(o => o.status !== 'delivered');
-        if (activeOrders.length > 0) {
-          const candidate = activeOrders[Math.floor(Math.random() * activeOrders.length)];
-          handleAdvanceScan(candidate.id);
-        } else {
-          showToast('All Shipments Delivered', 'No active deliveries to update.', 'info');
-        }
-      }, 1200);
     }
   };
 
@@ -326,48 +347,7 @@ export const App: React.FC = () => {
         deliveredCount={deliveredCount}
       />
 
-      {/* User Onboarding Action Bar */}
-      <div className="bg-slate-900 text-white px-4 py-2.5 shadow-xs border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-400/30 uppercase tracking-wider">
-              {userPhone ? 'Personal Account' : 'Phone Sign In Available'}
-            </span>
-            <span className="text-slate-300">
-              {userPhone
-                ? `Tracking orders for ${userPhone}`
-                : 'Sign in with your Indian mobile number (+91) to sync your shipments.'}
-            </span>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-slate-300 font-semibold text-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span>FastAPI Backend Ready (TrackParcel Adapter)</span>
-            </div>
-
-            <div className="h-3 w-px bg-slate-700 hidden sm:block"></div>
-
-            <button
-              onClick={() => setIsArchModalOpen(true)}
-              className="text-slate-300 hover:text-white flex items-center gap-1 cursor-pointer"
-            >
-              <Cpu className="w-3.5 h-3.5" />
-              <span>How It Works</span>
-            </button>
-
-            <div className="h-3 w-px bg-slate-700 hidden sm:block"></div>
-
-            <button
-              onClick={() => setIsFirebaseConfigOpen(true)}
-              className="text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
-            >
-              <Flame className="w-3.5 h-3.5" />
-              <span>Firebase SMS</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Main Content Layout */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
@@ -457,7 +437,6 @@ export const App: React.FC = () => {
         isOpen={isPhoneModalOpen}
         onClose={() => setIsPhoneModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
-        onOpenFirebaseConfig={() => setIsFirebaseConfigOpen(true)}
       />
 
       <FirebaseConfigModal

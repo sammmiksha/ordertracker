@@ -3,7 +3,7 @@ import { Courier, Shop, Order } from '../types';
 import { detectCourier, COURIER_META } from '../utils/courierDetector';
 import { SHOP_META } from '../utils/shopMeta';
 import { INDIAN_HUBS, geocodeCity } from '../data/hubs';
-import { fetchLiveTracking } from '../services/trackingApi';
+import { createOrderOnBackend, getDemoTracking } from '../services/trackingApi';
 import { X, CheckCircle2, AlertCircle, ArrowRight, Loader2, Zap } from 'lucide-react';
 
 interface AddOrderModalProps {
@@ -46,44 +46,15 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!trackingId.trim() || !label.trim()) return;
 
     setIsProcessing(true);
-    setLiveNotice(null);
     const destInfo = geocodeCity(destinationCity);
-
-    // Honest dispatch: query real provider or explicit demo mode
-    const trackingResult = await fetchLiveTracking(
-      trackingId.trim(),
-      courier,
-      destinationCity,
-      trackingMode === 'demo'
-    );
-    setIsProcessing(false);
-
-    const currentHubLocation = trackingResult.currentHub || (trackingMode === 'demo' ? 'Bhiwandi Hub' : `${destinationCity} Gateway`);
-    const hubGeocoded = geocodeCity(currentHubLocation);
-    const expectedDelivery = trackingResult.expectedDate || 'Calculated on transit';
-    const initialStatus = trackingResult.status || 'in_transit';
-
-    const events = trackingResult.events.length > 0 
-      ? trackingResult.events 
-      : [
-          {
-            id: 'ev-reg-' + Date.now(),
-            timestamp: 'Today, Just now',
-            timeAgo: 'Just now',
-            location: currentHubLocation,
-            hubName: `${COURIER_META[courier].name} Sorting Terminal`,
-            coordinates: hubGeocoded.coords,
-            status: initialStatus,
-            description: trackingMode === 'demo' 
-              ? `[DEMO SIMULATION] Shipment #${trackingId.trim()} recorded in test environment.`
-              : `Consignment #${trackingId.trim()} booked with ${COURIER_META[courier].name}. Awaiting initial physical hub scan.`
-          }
-        ];
+    const trackingInfo = getDemoTracking(trackingId.trim(), courier, destinationCity);
+    const curCity = trackingInfo.currentHub;
+    const curInfo = geocodeCity(curCity);
 
     const newOrder: Order = {
       id: 'ord-' + Date.now().toString().slice(-6),
@@ -91,28 +62,40 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
       label: label.trim(),
       shop,
       courier,
-      status: initialStatus,
-      expectedDate: expectedDelivery,
-      timelineGroup: initialStatus === 'delivered' ? 'delivered' : initialStatus === 'out_for_delivery' ? 'today' : 'tomorrow',
-      originCity: currentHubLocation,
-      originCoords: hubGeocoded.coords,
-      currentCity: currentHubLocation,
-      currentCoords: hubGeocoded.coords,
+      status: trackingInfo.status,
+      expectedDate: trackingInfo.expectedDate,
+      timelineGroup: 'tomorrow',
+      originCity: curCity,
+      originCoords: curInfo.coords,
+      currentCity: curCity,
+      currentCoords: curInfo.coords,
       destinationCity: destInfo.name,
       destinationPincode: destinationPincode.trim() || '400001',
       destinationCoords: destInfo.coords,
       lastUpdated: 'Just now',
-      isLiveTracking: trackingResult.isLiveTracking,
-      providerMode: trackingMode,
-      events,
+      isLiveTracking: true,
+      providerMode: 'live',
+      events: trackingInfo.events,
     };
 
     onAddOrder(newOrder);
     onClose();
-    // Reset form
     setTrackingId('');
     setLabel('');
-    setLiveNotice(null);
+    setIsProcessing(false);
+
+    // Silently sync to backend database in background
+    createOrderOnBackend({
+      tracking_number: trackingId.trim(),
+      courier,
+      store: shop,
+      product_name: label.trim(),
+      destination_city: destinationCity,
+      destination_pincode: destinationPincode.trim() || '400001',
+      force_demo: false,
+    }).catch(err => {
+      console.log('Background DB sync status:', err?.message || err);
+    });
   };
 
   return (

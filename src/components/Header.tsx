@@ -8,7 +8,8 @@ import {
   UserCheck, 
   Truck, 
   CheckCircle, 
-  RefreshCw 
+  RefreshCw,
+  Key 
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -85,11 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Action & Auth Controls */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Dual Provider Architecture Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>Live Provider + Demo Mode</span>
-            </div>
+
 
             {/* Refresh / Poller Button */}
             <button
