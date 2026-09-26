@@ -227,13 +227,49 @@ async function fetchShip24(
 }
 
 /**
- * Universal Tracker: Dispatches to active provider or Direct Smart Mode
+ * Universal Tracker: Dispatches to FastAPI Backend (TrackParcel / Intelligence Layer),
+ * active API provider, or Direct Smart Mode.
  */
 export async function fetchLiveTracking(
   trackingNumber: string,
   courier: Courier,
   destinationCity: string = 'Mumbai'
 ): Promise<TrackingApiResult> {
+  // 1. Try FastAPI Intelligence Backend if running
+  try {
+    const backendRes = await fetch('http://localhost:8000/api/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tracking_number: trackingNumber, courier }),
+      signal: AbortSignal.timeout(2000)
+    });
+
+    if (backendRes.ok) {
+      const data = await backendRes.json();
+      return {
+        success: true,
+        status: data.status,
+        currentHub: data.current_city,
+        destinationCity: data.destination_city || destinationCity,
+        expectedDate: data.expected_date || 'Standard Delivery',
+        events: data.events.map((ev: any, idx: number) => ({
+          id: `ev-be-${idx}-${Date.now()}`,
+          timestamp: ev.timestamp,
+          timeAgo: 'Live Scan',
+          location: ev.location,
+          hubName: ev.hub_name || ev.location,
+          coordinates: [ev.latitude || 20.5937, ev.longitude || 78.9629],
+          status: ev.status,
+          description: ev.description,
+        })),
+        providerName: data.provider_name,
+        isDirectSmartMode: !data.is_live_data,
+      };
+    }
+  } catch (backendErr) {
+    // FastAPI not running locally, proceed with frontend adapters
+  }
+
   const apiKey = getStoredApiKey();
   const provider = getStoredApiProvider();
 

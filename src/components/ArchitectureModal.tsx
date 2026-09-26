@@ -7,7 +7,7 @@ interface ArchitectureModalProps {
 }
 
 export const ArchitectureModal: React.FC<ArchitectureModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'flow' | 'tables' | 'couriers' | 'phases'>('flow');
+  const [activeTab, setActiveTab] = useState<'flow' | 'providers' | 'tables' | 'couriers' | 'phases'>('providers');
 
   if (!isOpen) return null;
 
@@ -45,7 +45,17 @@ export const ArchitectureModal: React.FC<ArchitectureModalProps> = ({ isOpen, on
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            1. Pipeline & How It Works
+            1. Pipeline
+          </button>
+          <button
+            onClick={() => setActiveTab('providers')}
+            className={`py-3 px-3 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'providers'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            2. TrackingProvider Architecture
           </button>
           <button
             onClick={() => setActiveTab('tables')}
@@ -55,7 +65,7 @@ export const ArchitectureModal: React.FC<ArchitectureModalProps> = ({ isOpen, on
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            2. Database Schema
+            3. Database Schema
           </button>
           <button
             onClick={() => setActiveTab('couriers')}
@@ -131,6 +141,67 @@ export const ArchitectureModal: React.FC<ArchitectureModalProps> = ({ isOpen, on
                 <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold">No Live GPS Limitation:</span> Couriers only record scan events when bags enter transit hubs. The UI clearly displays "Last seen: Jaipur hub, 2 hrs ago" rather than pseudo-GPS.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'providers' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-slate-900 text-base">TrackingProvider & Intelligence Layer</h4>
+                <span className="text-[11px] font-bold bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                  Clean Architecture
+                </span>
+              </div>
+
+              {/* Architecture Diagram Card */}
+              <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl font-mono text-[11px] leading-relaxed overflow-x-auto shadow-inner border border-slate-800">
+                <div className="text-amber-400 font-bold mb-1">// Provider Decoupling Interface Pattern</div>
+                <div>{"             ┌─────────────────────────┐"}</div>
+                <div>{"             │  BaseTrackingProvider   │  (Abstract Interface)"}</div>
+                <div>{"             └────────────┬────────────┘"}</div>
+                <div>{"                          │"}</div>
+                <div>{"         ┌────────────────┼────────────────┐"}</div>
+                <div>{"         ▼                ▼                ▼"}</div>
+                <div>{"   TrackParcel      Delhivery API     Smart Direct"}</div>
+                <div>{"    Provider        Direct Provider     Provider"}</div>
+                <div>{" (250 Free/mo)      (B2B Creds)      (Local Engine)"}</div>
+                <div className="text-emerald-400 font-bold mt-2">// OrderTracker Proprietary Intelligence Layer</div>
+                <div>{"                          │"}</div>
+                <div>{"       ┌──────────────────┴──────────────────┐"}</div>
+                <div>{"       ▼                  ▼                  ▼"}</div>
+                <div>{" Status Normalizer    Hub Geocoding      Delay & ETA"}</div>
+                <div>{" (In Transit/OFD)   (Jaipur, Bhiwandi)   (Confidence %)"}</div>
+              </div>
+
+              {/* 3 Core Pillars */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1.5">
+                  <span className="font-bold text-slate-900 block">1. Status Normalizer</span>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    Maps messy courier-specific scan terms ("Bag manifest", "Inbound sorting facility", "Van dispatched") into unified OrderTracker lifecycle states.
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1.5">
+                  <span className="font-bold text-slate-900 block">2. Hub Geocoder</span>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    Resolves Indian logistics megahubs (Bhiwandi, Sitapura Jaipur, Bilaspur Gurugram, Chakan Pune) to exact coordinates for the Leaflet map.
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1.5">
+                  <span className="font-bold text-slate-900 block">3. Corridor Delay ETA</span>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    Benchmarks transit hours on key Indian freight corridors (e.g. Jaipur ↔ Mumbai: 18-26 hrs) and flags unusual delays with predictive confidence.
+                  </p>
+                </div>
+              </div>
+
+              {/* Seamless Drop-in Notice */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 text-xs text-emerald-900 flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="font-bold">Zero Re-write on TrackParcel Approval:</strong> When your TrackParcel API key is granted, it plugs into the backend adapter with zero frontend changes.
                 </div>
               </div>
             </div>
