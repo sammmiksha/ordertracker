@@ -28,6 +28,8 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
   const [destinationPincode, setDestinationPincode] = useState('400001');
   const [detectionInfo, setDetectionInfo] = useState<{ courier: Courier; confidence: string; reason: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [trackingMode, setTrackingMode] = useState<'live' | 'demo'>('live');
+  const [liveNotice, setLiveNotice] = useState<string | null>(null);
 
   // Auto-detect courier as tracking ID changes
   useEffect(() => {
@@ -49,15 +51,21 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
     if (!trackingId.trim() || !label.trim()) return;
 
     setIsProcessing(true);
+    setLiveNotice(null);
     const destInfo = geocodeCity(destinationCity);
 
-    // Fetch tracking (using Direct Mode or active API)
-    const trackingResult = await fetchLiveTracking(trackingId.trim(), courier, destinationCity);
+    // Honest dispatch: query real provider or explicit demo mode
+    const trackingResult = await fetchLiveTracking(
+      trackingId.trim(),
+      courier,
+      destinationCity,
+      trackingMode === 'demo'
+    );
     setIsProcessing(false);
 
-    const currentHubLocation = trackingResult.currentHub || 'Logistics Hub';
+    const currentHubLocation = trackingResult.currentHub || (trackingMode === 'demo' ? 'Bhiwandi Hub' : `${destinationCity} Gateway`);
     const hubGeocoded = geocodeCity(currentHubLocation);
-    const expectedDelivery = trackingResult.expectedDate || 'Tomorrow, by 6:00 PM';
+    const expectedDelivery = trackingResult.expectedDate || 'Calculated on transit';
     const initialStatus = trackingResult.status || 'in_transit';
 
     const events = trackingResult.events.length > 0 
@@ -68,10 +76,12 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
             timestamp: 'Today, Just now',
             timeAgo: 'Just now',
             location: currentHubLocation,
-            hubName: `${COURIER_META[courier].name} Sort Terminal`,
+            hubName: `${COURIER_META[courier].name} Sorting Terminal`,
             coordinates: hubGeocoded.coords,
             status: initialStatus,
-            description: `Shipment #${trackingId.trim()} in transit with ${COURIER_META[courier].name}.`
+            description: trackingMode === 'demo' 
+              ? `[DEMO SIMULATION] Shipment #${trackingId.trim()} recorded in test environment.`
+              : `Consignment #${trackingId.trim()} booked with ${COURIER_META[courier].name}. Awaiting initial physical hub scan.`
           }
         ];
 
@@ -92,6 +102,8 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
       destinationPincode: destinationPincode.trim() || '400001',
       destinationCoords: destInfo.coords,
       lastUpdated: 'Just now',
+      isLiveTracking: trackingResult.isLiveTracking,
+      providerMode: trackingMode,
       events,
     };
 
@@ -100,6 +112,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
     // Reset form
     setTrackingId('');
     setLabel('');
+    setLiveNotice(null);
   };
 
   return (
@@ -260,6 +273,47 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
                 className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
               />
             </div>
+          </div>
+
+          {/* Explicit Tracking Mode Toggle */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Tracking Mode
+              </span>
+              <span className="text-[10px] text-slate-500 font-medium">
+                {trackingMode === 'live' ? '🟢 Real courier network query' : '🟡 Simulated test events'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setTrackingMode('live')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  trackingMode === 'live'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <span>🟢 Live Tracking</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrackingMode('demo')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  trackingMode === 'demo'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <span>🟡 Demo Mode</span>
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-500 leading-tight">
+              {trackingMode === 'live' 
+                ? 'Queries live courier tracking via server-side TrackParcel adapter. Real events only.'
+                : 'Generates labeled demo hub scans for UI & map testing without live courier API credentials.'}
+            </p>
           </div>
 
           {/* Form Actions */}

@@ -62,5 +62,7 @@ export interface Order {
   destinationCoords: [number, number];
   lastUpdated: string;
   tag?: string; // e.g. "Mom's parcel", "Gift", "Work"
+  isLiveTracking: boolean; // true = genuine live courier scan data, false = demo simulation
+  providerMode: 'live' | 'demo';
   events: TrackingEvent[];
 }

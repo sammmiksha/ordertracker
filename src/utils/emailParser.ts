@@ -217,6 +217,8 @@ export function createOrderFromParsed(data: ParsedEmailResult): Order {
     destinationCoords: destInfo.coords,
     lastUpdated: 'Just now (via Email Auto-Import)',
     tag: 'Auto-Imported',
+    isLiveTracking: false,
+    providerMode: 'demo',
     events: [
       {
         id: 'ev-auto-2',

@@ -129,6 +129,12 @@ export const MapView: React.FC<MapViewProps> = ({
               ${courier.name}
             </span>
           </div>
+          <div class="mb-1.5">
+            ${order.isLiveTracking 
+              ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">🟢 Live tracking</span>'
+              : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">🟡 Demo data — not live</span>'
+            }
+          </div>
           <h4 class="font-bold text-slate-900 text-sm leading-tight mb-1">${order.label}</h4>
           <div class="text-[11px] text-slate-600 mb-2">
             <span class="font-medium text-slate-400">Tracking:</span> <code class="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-800">${order.trackingId}</code>

@@ -85,10 +85,10 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Action & Auth Controls */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Direct Mode Status Badge (No API Key Required!) */}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <Zap className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Direct Mode (No Key Needed)</span>
+            {/* Dual Provider Architecture Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>Live Provider + Demo Mode</span>
             </div>
 
             {/* Refresh / Poller Button */}

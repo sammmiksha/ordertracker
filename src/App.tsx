@@ -341,9 +341,9 @@ export const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
+            <div className="flex items-center gap-1.5 text-slate-300 font-semibold text-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span>Direct Tracking (No API Key Required)</span>
+              <span>FastAPI Backend Ready (TrackParcel Adapter)</span>
             </div>
 
             <div className="h-3 w-px bg-slate-700 hidden sm:block"></div>

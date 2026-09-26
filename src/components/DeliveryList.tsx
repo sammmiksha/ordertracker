@@ -256,6 +256,21 @@ export const DeliveryList: React.FC<DeliveryListProps> = ({
                           {getStatusBadge(order.status)}
                         </div>
 
+                        {/* Explicit Real Mode vs Demo Mode Badge */}
+                        <div className="mb-2">
+                          {order.isLiveTracking ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                              🟢 Live tracking
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                              🟡 Demo data — not live courier tracking
+                            </span>
+                          )}
+                        </div>
+
                         {/* Order Label & Expected Time */}
                         <div className="mb-2">
                           <h4 className="font-bold text-slate-900 text-base leading-snug line-clamp-1">
