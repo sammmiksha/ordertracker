@@ -3,6 +3,7 @@ import confetti from 'canvas-confetti';
 import { Order, DeliveryStatus, TimelineGroup } from './types';
 import { INITIAL_ORDERS } from './data/mockOrders';
 import { COURIER_META } from './utils/courierDetector';
+import { geocodeCity } from './data/hubs';
 import { 
   getStoredApiKey, 
   fetchOrdersFromBackend, 
@@ -43,11 +44,31 @@ interface ToastNotification {
 }
 
 export const App: React.FC = () => {
-  // Real orders only - wiped old fake mock data
+  // Sanitize coordinates for existing orders (replaces outdated Nagpur fallbacks)
+  const sanitizeOrderCoordinates = (orderList: Order[]): Order[] => {
+    return orderList.map(o => {
+      const isNagpurDefault = Math.abs(o.destinationCoords[0] - 21.1458) < 0.01 && Math.abs(o.destinationCoords[1] - 79.0882) < 0.01;
+      const destCityNorm = (o.destinationCity || '').toLowerCase();
+      if (isNagpurDefault && !destCityNorm.includes('nagpur')) {
+        const correctGeo = geocodeCity(o.destinationCity);
+        return {
+          ...o,
+          destinationCoords: correctGeo.coords,
+          currentCoords: (o.status === 'delivered' || o.status === 'out_for_delivery') ? correctGeo.coords : o.currentCoords
+        };
+      }
+      return o;
+    });
+  };
+
+  // Real orders only
   const [orders, setOrders] = useState<Order[]>(() => {
     try {
       const saved = localStorage.getItem('ordertracker_real_orders_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return sanitizeOrderCoordinates(parsed);
+      }
     } catch (e) {
       console.error('Failed to load saved orders:', e);
     }
@@ -81,7 +102,7 @@ export const App: React.FC = () => {
       try {
         const dbOrders = await fetchOrdersFromBackend();
         if (isMounted && dbOrders && dbOrders.length > 0) {
-          setOrders(dbOrders);
+          setOrders(sanitizeOrderCoordinates(dbOrders));
         }
       } catch (err) {
         console.warn('Backend orders unavailable or empty, keeping local state:', err);

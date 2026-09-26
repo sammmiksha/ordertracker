@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Courier, Shop, Order } from '../types';
 import { detectCourier, COURIER_META } from '../utils/courierDetector';
 import { SHOP_META } from '../utils/shopMeta';
-import { INDIAN_HUBS, geocodeCity } from '../data/hubs';
+import { INDIAN_HUBS, geocodeCity, reverseGeocodeUserLocation } from '../data/hubs';
 import { createOrderOnBackend, getDemoTracking } from '../services/trackingApi';
-import { X, CheckCircle2, AlertCircle, ArrowRight, Loader2, Zap } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, ArrowRight, Loader2, Zap, MapPin } from 'lucide-react';
 
 interface AddOrderModalProps {
   isOpen: boolean;
@@ -31,6 +31,11 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
   const [trackingMode, setTrackingMode] = useState<'live' | 'demo'>('live');
   const [liveNotice, setLiveNotice] = useState<string | null>(null);
 
+  // User GPS Geolocation State
+  const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<string | null>(null);
+
   // Auto-detect courier as tracking ID changes
   useEffect(() => {
     if (trackingId.trim().length >= 4) {
@@ -44,6 +49,46 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
     }
   }, [trackingId]);
 
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationStatus('Detecting GPS location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserCoords([lat, lng]);
+
+        try {
+          const rev = await reverseGeocodeUserLocation(lat, lng);
+          if (rev.city) {
+            setDestinationCity(rev.city);
+          }
+          if (rev.pincode) {
+            setDestinationPincode(rev.pincode);
+          }
+          setLocationStatus(`📍 Detected: ${rev.city} (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+        } catch (e) {
+          setDestinationCity('Current Location');
+          setLocationStatus(`📍 GPS: ${lat.toFixed(3)}, ${lng.toFixed(3)}`);
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        setIsLocating(false);
+        setLocationStatus('Could not access GPS. Please type your city/area.');
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -55,6 +100,9 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
     const trackingInfo = getDemoTracking(trackingId.trim(), courier, destinationCity);
     const curCity = trackingInfo.currentHub;
     const curInfo = geocodeCity(curCity);
+
+    // Prefer exact GPS coordinates if user used "Use My Location"
+    const finalDestCoords: [number, number] = userCoords || destInfo.coords;
 
     const newOrder: Order = {
       id: 'ord-' + Date.now().toString().slice(-6),
@@ -71,7 +119,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
       currentCoords: curInfo.coords,
       destinationCity: destInfo.name,
       destinationPincode: destinationPincode.trim() || '400001',
-      destinationCoords: destInfo.coords,
+      destinationCoords: finalDestCoords,
       lastUpdated: 'Just now',
       isLiveTracking: true,
       providerMode: 'live',
@@ -82,6 +130,8 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
     onClose();
     setTrackingId('');
     setLabel('');
+    setUserCoords(null);
+    setLocationStatus(null);
     setIsProcessing(false);
 
     // Silently sync to backend database in background
@@ -231,16 +281,36 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({
           {/* Destination City & Pincode */}
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Delivery City
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Delivery Destination
+                </label>
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  disabled={isLocating}
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline flex items-center gap-1 cursor-pointer bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-200 transition-colors"
+                >
+                  <MapPin className={`w-3 h-3 text-indigo-600 ${isLocating ? 'animate-bounce' : ''}`} />
+                  <span>{isLocating ? 'Locating GPS...' : '📍 Use My Location'}</span>
+                </button>
+              </div>
               <input
                 type="text"
                 value={destinationCity}
-                onChange={e => setDestinationCity(e.target.value)}
-                placeholder="e.g. Mumbai, Delhi, Bengaluru"
+                onChange={e => {
+                  setDestinationCity(e.target.value);
+                  setUserCoords(null);
+                  setLocationStatus(null);
+                }}
+                placeholder="e.g. Mira Road, Mumbai, Pune, Thane"
                 className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
               />
+              {locationStatus && (
+                <p className="text-[10px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
+                  <span>{locationStatus}</span>
+                </p>
+              )}
             </div>
 
             <div>
