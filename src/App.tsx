@@ -10,6 +10,7 @@ import { MapView } from './components/MapView';
 import { DeliveryList } from './components/DeliveryList';
 import { AddOrderModal } from './components/AddOrderModal';
 import { PhoneAuthModal } from './components/PhoneAuthModal';
+import { FirebaseConfigModal } from './components/FirebaseConfigModal';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { TimelineModal } from './components/TimelineModal';
 import { ArchitectureModal } from './components/ArchitectureModal';
@@ -23,7 +24,8 @@ import {
   Cpu,
   Key,
   ShieldCheck,
-  Plus
+  Plus,
+  Flame
 } from 'lucide-react';
 
 interface ToastNotification {
@@ -59,6 +61,7 @@ export const App: React.FC = () => {
   const [timelineOrder, setTimelineOrder] = useState<Order | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [isFirebaseConfigOpen, setIsFirebaseConfigOpen] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isArchModalOpen, setIsArchModalOpen] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
@@ -352,6 +355,16 @@ export const App: React.FC = () => {
               <Cpu className="w-3.5 h-3.5" />
               <span>How It Works</span>
             </button>
+
+            <div className="h-3 w-px bg-slate-700 hidden sm:block"></div>
+
+            <button
+              onClick={() => setIsFirebaseConfigOpen(true)}
+              className="text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
+            >
+              <Flame className="w-3.5 h-3.5" />
+              <span>Firebase SMS</span>
+            </button>
           </div>
         </div>
       </div>
@@ -444,6 +457,13 @@ export const App: React.FC = () => {
         isOpen={isPhoneModalOpen}
         onClose={() => setIsPhoneModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
+        onOpenFirebaseConfig={() => setIsFirebaseConfigOpen(true)}
+      />
+
+      <FirebaseConfigModal
+        isOpen={isFirebaseConfigOpen}
+        onClose={() => setIsFirebaseConfigOpen(false)}
+        onConfigSaved={() => showToast('Firebase Connected', 'Real Firebase Phone Auth is ready for SMS OTP.', 'info')}
       />
 
       <ApiKeyModal
